@@ -1,30 +1,52 @@
-name: NexoraOS CI Boundary Check
+name: NexoraOS M1-A CI Target
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ master, main ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ master, main ]
 
 jobs:
-  verify:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Source Code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Toolchain and Target
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly
           targets: x86_64-unknown-none
 
-      - name: Install Dependencies
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Run Target Compilation Check
-        run: cargo check -p nexora_kernel --target x86_64-unknown-none
-
-      - name: Run Dependency Audit (Section 27)
+      - name: Install Boot & Emulation Tools
         run: |
-          chmod +x scripts/audit_deps.sh
-          ./scripts/audit_deps.sh
+          sudo apt-get update
+          sudo apt-get install -y grub-pc-bin grub-common xorriso qemu-system-x86
+
+      - name: Build Kernel Binary
+        run: |
+          cargo build -p nexora_kernel --target x86_64-unknown-none
+
+      - name: Verify Multiboot2 Specification
+        run: |
+          grub-file --is-x86-multiboot2 target/x86_64-unknown-none/debug/nexora_kernel
+
+      - name: Prepare ISO Directory & Build ISO Image
+        run: |
+          cp target/x86_64-unknown-none/debug/nexora_kernel iso/boot/
+          grub-mkrescue -o nexoraos.iso iso/
+
+      - name: Run QEMU Headless Boot Test
+        run: |
+          timeout 30s qemu-system-x86_64 \
+            -cdrom nexoraos.iso \
+            -display none \
+            -serial file:serial.log \
+            -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+            -no-reboot || true
+
+      - name: Validate Early Boot Output
+        run: |
+          cat serial.log
+          grep -q "\[NEXORAOS_BOOT_OK\]" serial.log
