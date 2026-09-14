@@ -1,13 +1,33 @@
 #![no_std]
 #![no_main]
 
-mod boot;
+mod serial;
 
 use core::arch::asm;
 use core::panic::PanicInfo;
 
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
+#[no_mangle]
+pub extern "C" fn kmain(multiboot_info_addr: usize) -> ! {
+    // Initialize Early Kernel Serial Debug Console (COM1)
+    unsafe {
+        serial::SERIAL1.init();
+    }
+
+    // Verify formatted serial output with explicit expected tokens
+    serial_println!("[NEXORAOS_BOOT_OK]");
+    serial_println!("Multiboot2 Info Addr: 0x{:x}", multiboot_info_addr);
+    serial_println!("Console Test: status={}", 200);
+
+    // QEMU isa-debug-exit request
+    unsafe {
+        asm!(
+            "out dx, ax",
+            in("dx") 0xf4u16,
+            in("ax") 0x10u16,
+            options(nomem, nostack, preserves_flags)
+        );
+    }
+
     loop {
         unsafe {
             asm!("hlt");
@@ -15,35 +35,9 @@ fn panic(_info: &PanicInfo) -> ! {
     }
 }
 
-#[inline(always)]
-unsafe fn outb(port: u16, val: u8) {
-    asm!("out dx, al", in("dx") port, in("al") val, options(nomem, nostack, preserves_flags));
-}
-
-#[inline(always)]
-unsafe fn outw(port: u16, val: u16) {
-    asm!("out dx, ax", in("dx") port, in("ax") val, options(nomem, nostack, preserves_flags));
-}
-
-fn serial_write_str(s: &str) {
-    for byte in s.bytes() {
-        unsafe {
-            outb(0x3F8, byte);
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn kmain(_multiboot_info_addr: usize) -> ! {
-    // Early Kernel Debug Output via Serial COM1
-    serial_write_str("[NEXORAOS_BOOT_OK]\n");
-
-    // Trigger isa-debug-exit (IO Port 0xF4) for automated CI test exit
-    unsafe {
-        outw(0xf4, 0x10);
-    }
-
-    // Fallback infinite halt loop
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    serial_println!("KERNEL PANIC: {}", info);
     loop {
         unsafe {
             asm!("hlt");

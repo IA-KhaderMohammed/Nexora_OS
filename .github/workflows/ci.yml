@@ -1,4 +1,4 @@
-name: NexoraOS M1-A CI Target
+name: NexoraOS M1-B CI Target
 
 on:
   push:
@@ -46,7 +46,8 @@ jobs:
             -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
             -no-reboot || true
 
-      - name: Validate Early Boot Output
+      - name: Validate Serial Console Formatted Output
         run: |
           cat serial.log
           grep -q "\[NEXORAOS_BOOT_OK\]" serial.log
+          grep -q "Console Test: status=200" serial.log
