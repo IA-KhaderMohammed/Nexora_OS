@@ -1,0 +1,30 @@
+name: NexoraOS CI Boundary Check
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Toolchain and Target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-none
+
+      - name: Install Dependencies
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Run Target Compilation Check
+        run: cargo check -p nexora_kernel --target x86_64-unknown-none
+
+      - name: Run Dependency Audit (Section 27)
+        run: |
+          chmod +x scripts/audit_deps.sh
+          ./scripts/audit_deps.sh

@@ -1,0 +1,8 @@
+[package]
+name = "nexora_kernel"
+version = "0.1.0"
+edition = "2021"
+authors = ["NexoraOS Team"]
+description = "NexoraOS Bare Microkernel Core (M0)"
+
+[dependencies]
